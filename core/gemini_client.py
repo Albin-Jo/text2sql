@@ -2,6 +2,8 @@
 """
 Async Gemini API client for Text-to-SQL generation.
 Uses the google-genai SDK with retry logic and error handling.
+
+FIXED: Retry logic now properly wraps the synchronous API call.
 """
 
 import asyncio
@@ -58,13 +60,13 @@ class GeminiResponse:
 class GeminiClient:
     """
     Async client for Google Gemini API.
-    
+
     Features:
     - Automatic retry with exponential backoff
     - Token counting and latency tracking
     - Error classification
     - Batch generation support
-    
+
     Example:
         ```python
         client = GeminiClient()
@@ -73,31 +75,34 @@ class GeminiClient:
             print(response.text)
         ```
     """
-    
+
     def __init__(
-        self,
-        api_key: Optional[str] = None,
-        model: Optional[str] = None,
-        settings: Optional[GeminiSettings] = None,
+            self,
+            api_key: Optional[str] = None,
+            model: Optional[str] = None,
+            settings: Optional[GeminiSettings] = None,
+            max_retries: int = 3,
     ):
         """
         Initialize Gemini client.
-        
+
         Args:
             api_key: Google API key. Falls back to settings/environment.
             model: Model name. Falls back to settings.
             settings: Optional GeminiSettings override.
+            max_retries: Maximum retry attempts for transient errors.
         """
         self._settings = settings or self._load_settings()
-        
+
         # Override with explicit parameters
         self._api_key = api_key or self._settings.api_key or self._get_api_key_from_env()
         self._model = model or self._settings.model
-        
+        self._max_retries = max_retries
+
         # Initialize client
         self._client: Optional[genai.Client] = None
         self._initialized = False
-        
+
     def _load_settings(self) -> GeminiSettings:
         """Load settings from configuration."""
         try:
@@ -105,12 +110,12 @@ class GeminiClient:
             return get_gemini_settings()
         except Exception:
             return GeminiSettings()
-    
+
     def _get_api_key_from_env(self) -> str:
         """Get API key from environment."""
         import os
         return os.environ.get("GOOGLE_API_KEY", "")
-    
+
     def _ensure_initialized(self) -> None:
         """Ensure client is initialized."""
         if not self._initialized:
@@ -121,21 +126,21 @@ class GeminiClient:
                 )
             self._client = genai.Client(api_key=self._api_key)
             self._initialized = True
-    
+
     @property
     def model(self) -> str:
         """Current model name."""
         return self._model
-    
+
     @property
     def default_temperature(self) -> float:
         """Default temperature setting."""
         return self._settings.temperature
-    
+
     def _classify_error(self, error: Exception) -> GeminiErrorType:
         """Classify an exception into error type."""
         error_str = str(error).lower()
-        
+
         if "rate" in error_str or "quota" in error_str or "429" in error_str:
             return GeminiErrorType.RATE_LIMIT
         elif "invalid" in error_str or "400" in error_str:
@@ -148,7 +153,7 @@ class GeminiClient:
             return GeminiErrorType.TIMEOUT
         else:
             return GeminiErrorType.UNKNOWN
-    
+
     def _is_retryable_error(self, error: Exception) -> bool:
         """Check if error is retryable."""
         error_type = self._classify_error(error)
@@ -157,23 +162,30 @@ class GeminiClient:
             GeminiErrorType.SERVER_ERROR,
             GeminiErrorType.TIMEOUT,
         }
-    
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=10),
-        retry=retry_if_exception_type((Exception,)),
-        reraise=True,
-    )
-    async def _generate_with_retry(
-        self,
-        prompt: str,
-        temperature: float,
-        max_tokens: int,
-        system_prompt: Optional[str] = None,
+
+    def _create_retry_decorator(self):
+        """Create retry decorator with current settings."""
+        return retry(
+            stop=stop_after_attempt(self._max_retries),
+            wait=wait_exponential(multiplier=1, min=1, max=10),
+            retry=retry_if_exception_type((Exception,)),
+            reraise=True,
+        )
+
+    def _generate_sync(
+            self,
+            prompt: str,
+            temperature: float,
+            max_tokens: int,
+            system_prompt: Optional[str],
     ) -> types.GenerateContentResponse:
-        """Generate with retry logic."""
+        """
+        Synchronous generation for thread pool execution.
+
+        This method performs the actual API call to Gemini.
+        """
         self._ensure_initialized()
-        
+
         # Build config
         config = types.GenerateContentConfig(
             temperature=temperature,
@@ -181,62 +193,84 @@ class GeminiClient:
             top_p=self._settings.top_p,
             top_k=self._settings.top_k,
         )
-        
+
         # Add system instruction if provided
         if system_prompt:
             config.system_instruction = system_prompt
-        
-        # Generate (sync call - genai SDK is synchronous)
-        response = self._client.models.generate_content(
+
+        return self._client.models.generate_content(
             model=self._model,
             contents=prompt,
             config=config,
         )
-        
-        return response
-    
+
+    def _generate_sync_with_retry(
+            self,
+            prompt: str,
+            temperature: float,
+            max_tokens: int,
+            system_prompt: Optional[str],
+    ) -> types.GenerateContentResponse:
+        """
+        Synchronous generation WITH retry logic.
+
+        This wraps _generate_sync with the tenacity retry decorator.
+        The decorator is applied dynamically to allow runtime configuration.
+
+        FIX: This method is now actually used by generate() via run_in_executor.
+        """
+        # Apply retry decorator dynamically
+        retry_decorator = self._create_retry_decorator()
+
+        @retry_decorator
+        def _inner():
+            return self._generate_sync(prompt, temperature, max_tokens, system_prompt)
+
+        return _inner()
+
     async def generate(
-        self,
-        prompt: str,
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        system_prompt: Optional[str] = None,
+            self,
+            prompt: str,
+            temperature: Optional[float] = None,
+            max_tokens: Optional[int] = None,
+            system_prompt: Optional[str] = None,
     ) -> GeminiResponse:
         """
         Generate text from prompt.
-        
+
         Args:
             prompt: The input prompt
             temperature: Sampling temperature (0.0-2.0)
             max_tokens: Maximum output tokens
             system_prompt: Optional system instruction
-            
+
         Returns:
             GeminiResponse with generated text and metrics
         """
         start_time = time.perf_counter()
-        
+
         # Use defaults if not specified
         temp = temperature if temperature is not None else self._settings.temperature
         tokens = max_tokens or self._settings.max_output_tokens
-        
+
         try:
-            # Run sync API call in thread pool to not block
+            # Run sync API call with retry in thread pool to not block event loop
+            # FIX: Now using _generate_sync_with_retry which includes retry logic
             loop = asyncio.get_event_loop()
             response = await loop.run_in_executor(
                 None,
-                lambda: self._generate_sync(prompt, temp, tokens, system_prompt)
+                lambda: self._generate_sync_with_retry(prompt, temp, tokens, system_prompt)
             )
-            
+
             latency_ms = (time.perf_counter() - start_time) * 1000
-            
+
             # Extract text
             text = ""
             if response.candidates:
                 candidate = response.candidates[0]
                 if candidate.content and candidate.content.parts:
                     text = candidate.content.parts[0].text or ""
-            
+
             # Build metrics
             metrics = GenerationMetrics(
                 latency_ms=latency_ms,
@@ -244,24 +278,24 @@ class GeminiClient:
                 temperature=temp,
                 finish_reason=str(response.candidates[0].finish_reason) if response.candidates else "",
             )
-            
+
             # Try to get token counts if available
             if hasattr(response, 'usage_metadata') and response.usage_metadata:
                 metrics.prompt_tokens = getattr(response.usage_metadata, 'prompt_token_count', 0)
                 metrics.completion_tokens = getattr(response.usage_metadata, 'candidates_token_count', 0)
                 metrics.total_tokens = getattr(response.usage_metadata, 'total_token_count', 0)
-            
+
             return GeminiResponse(
                 text=text,
                 success=True,
                 metrics=metrics,
                 raw_response=response,
             )
-            
+
         except Exception as e:
             latency_ms = (time.perf_counter() - start_time) * 1000
             error_type = self._classify_error(e)
-            
+
             return GeminiResponse(
                 text="",
                 success=False,
@@ -269,58 +303,30 @@ class GeminiClient:
                 error=str(e),
                 error_type=error_type,
             )
-    
-    def _generate_sync(
-        self,
-        prompt: str,
-        temperature: float,
-        max_tokens: int,
-        system_prompt: Optional[str],
-    ) -> types.GenerateContentResponse:
-        """Synchronous generation for thread pool execution."""
-        self._ensure_initialized()
-        
-        # Build config
-        config = types.GenerateContentConfig(
-            temperature=temperature,
-            max_output_tokens=max_tokens,
-            top_p=self._settings.top_p,
-            top_k=self._settings.top_k,
-        )
-        
-        # Add system instruction if provided
-        if system_prompt:
-            config.system_instruction = system_prompt
-        
-        return self._client.models.generate_content(
-            model=self._model,
-            contents=prompt,
-            config=config,
-        )
-    
+
     async def generate_batch(
-        self,
-        prompts: list[str],
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        system_prompt: Optional[str] = None,
-        max_concurrent: int = 5,
+            self,
+            prompts: list[str],
+            temperature: Optional[float] = None,
+            max_tokens: Optional[int] = None,
+            system_prompt: Optional[str] = None,
+            max_concurrent: int = 5,
     ) -> list[GeminiResponse]:
         """
         Generate responses for multiple prompts concurrently.
-        
+
         Args:
             prompts: List of prompts
             temperature: Sampling temperature
             max_tokens: Maximum output tokens
             system_prompt: Optional system instruction
             max_concurrent: Maximum concurrent requests
-            
+
         Returns:
             List of GeminiResponse objects
         """
         semaphore = asyncio.Semaphore(max_concurrent)
-        
+
         async def generate_with_semaphore(prompt: str) -> GeminiResponse:
             async with semaphore:
                 return await self.generate(
@@ -329,22 +335,22 @@ class GeminiClient:
                     max_tokens=max_tokens,
                     system_prompt=system_prompt,
                 )
-        
+
         tasks = [generate_with_semaphore(p) for p in prompts]
         return await asyncio.gather(*tasks)
-    
+
     async def count_tokens(self, text: str) -> int:
         """
         Count tokens in text.
-        
+
         Args:
             text: Text to count tokens for
-            
+
         Returns:
             Token count
         """
         self._ensure_initialized()
-        
+
         try:
             loop = asyncio.get_event_loop()
             result = await loop.run_in_executor(

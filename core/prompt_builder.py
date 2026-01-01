@@ -2,11 +2,16 @@
 """
 Dynamic prompt construction for Text-to-SQL generation.
 Provides a fluent interface for building prompts with various components.
+
+FIXED: FewShotExample is now imported from data.few_shot_pool instead of being duplicated.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Optional
+
+# FIX: Import FewShotExample from single source of truth
+from data.few_shot_pool import FewShotExample
 
 
 class SchemaFormat(str, Enum):
@@ -18,24 +23,16 @@ class SchemaFormat(str, Enum):
     COMPACT = "compact"
 
 
-@dataclass
-class FewShotExample:
-    """A few-shot example for prompting."""
-    question: str
-    sql: str
-    explanation: Optional[str] = None
-    difficulty: str = "medium"
-    tags: list[str] = field(default_factory=list)
-    
-    def to_prompt_string(self, include_explanation: bool = False) -> str:
-        """Convert to prompt format."""
-        parts = [
-            f"Question: {self.question}",
-            f"SQL: {self.sql}"
-        ]
-        if include_explanation and self.explanation:
-            parts.insert(1, f"Reasoning: {self.explanation}")
-        return "\n".join(parts)
+# NOTE: FewShotExample class has been removed from here.
+# It is now imported from data.few_shot_pool to avoid duplication.
+# The FewShotExample in few_shot_pool has these fields:
+#   - question: str
+#   - sql: str
+#   - explanation: Optional[str] = None
+#   - difficulty: str = "medium"
+#   - tags: list[str] = field(default_factory=list)
+#   - tables_used: list[str] = field(default_factory=list)
+#   - embedding: Optional[np.ndarray] = None
 
 
 @dataclass
@@ -45,11 +42,11 @@ class PromptTemplate:
     system_prompt: str
     user_template: str
     description: str = ""
-    
+
     def format(self, **kwargs: Any) -> tuple[str, str]:
         """
         Format template with provided values.
-        
+
         Returns:
             Tuple of (system_prompt, user_prompt)
         """
@@ -62,7 +59,7 @@ class PromptTemplate:
 class PromptBuilder:
     """
     Fluent builder for constructing Text-to-SQL prompts.
-    
+
     Example:
         ```python
         builder = PromptBuilder()
@@ -77,7 +74,7 @@ class PromptBuilder:
         )
         ```
     """
-    
+
     # Pre-built system prompts
     SYSTEM_PROMPTS = {
         "default": """You are an expert SQL developer. Your task is to convert natural language questions into accurate SQL queries.
@@ -118,7 +115,7 @@ Rules:
 - Query must be syntactically correct
 - Use exact schema names provided""",
     }
-    
+
     def __init__(self):
         """Initialize the prompt builder."""
         self._system_prompt: str = self.SYSTEM_PROMPTS["default"]
@@ -135,152 +132,168 @@ Rules:
         self._decomposition: bool = False
         self._sample_data: str = ""
         self._column_descriptions: str = ""
-        
+
     def reset(self) -> "PromptBuilder":
         """Reset builder to initial state."""
         self.__init__()
         return self
-    
+
     def use_system_prompt(self, name: str) -> "PromptBuilder":
         """Use a pre-built system prompt."""
         if name in self.SYSTEM_PROMPTS:
             self._system_prompt = self.SYSTEM_PROMPTS[name]
         return self
-    
+
     def set_system_prompt(self, prompt: str) -> "PromptBuilder":
         """Set custom system prompt."""
         self._system_prompt = prompt
         return self
-    
+
     def set_task(self, task: str) -> "PromptBuilder":
         """Set the task description."""
         self._task = task
         return self
-    
+
     def set_schema(
-        self,
-        schema: str,
-        format: SchemaFormat = SchemaFormat.DDL
+            self,
+            schema: str,
+            format: SchemaFormat = SchemaFormat.DDL
     ) -> "PromptBuilder":
         """Set the database schema."""
         self._schema = schema
         self._schema_format = format
         return self
-    
+
     def add_sample_data(self, sample_data: str) -> "PromptBuilder":
         """Add sample data from tables."""
         self._sample_data = sample_data
         return self
-    
+
     def add_column_descriptions(self, descriptions: str) -> "PromptBuilder":
         """Add column descriptions/documentation."""
         self._column_descriptions = descriptions
         return self
-    
+
     def add_example(self, example: FewShotExample) -> "PromptBuilder":
         """Add a single few-shot example."""
         self._examples.append(example)
         return self
-    
+
     def add_examples(self, examples: list[FewShotExample]) -> "PromptBuilder":
         """Add multiple few-shot examples."""
         self._examples.extend(examples)
         return self
-    
+
     def set_question(self, question: str) -> "PromptBuilder":
         """Set the user's natural language question."""
         self._question = question
         return self
-    
+
     def add_rule(self, rule: str) -> "PromptBuilder":
         """Add a single rule/constraint."""
         self._rules.append(rule)
         return self
-    
+
     def add_rules(self, rules: list[str]) -> "PromptBuilder":
         """Add multiple rules/constraints."""
         self._rules.extend(rules)
         return self
-    
+
     def add_hint(self, hint: str) -> "PromptBuilder":
         """Add a hint for query generation."""
         self._hints.append(hint)
         return self
-    
+
     def add_hints(self, hints: list[str]) -> "PromptBuilder":
         """Add multiple hints."""
         self._hints.extend(hints)
         return self
-    
+
     def add_context(self, key: str, value: Any) -> "PromptBuilder":
         """Add contextual information."""
         self._context[key] = value
         return self
-    
+
     def set_output_format(self, format_instruction: str) -> "PromptBuilder":
         """Set expected output format."""
         self._output_format = format_instruction
         return self
-    
+
     def enable_chain_of_thought(self, enabled: bool = True) -> "PromptBuilder":
         """Enable chain-of-thought reasoning."""
         self._chain_of_thought = enabled
         return self
-    
+
     def enable_decomposition(self, enabled: bool = True) -> "PromptBuilder":
         """Enable question decomposition."""
         self._decomposition = enabled
         return self
-    
+
+    def _format_example(self, example: FewShotExample, include_explanation: bool) -> str:
+        """
+        Format a FewShotExample for prompt inclusion.
+
+        This helper method ensures compatibility with FewShotExample from few_shot_pool.
+        """
+        parts = [
+            f"Question: {example.question}",
+        ]
+        if include_explanation and example.explanation:
+            parts.append(f"Reasoning: {example.explanation}")
+        parts.append(f"SQL: {example.sql}")
+        return "\n".join(parts)
+
     def build(self) -> tuple[str, str]:
         """
         Build the final prompt.
-        
+
         Returns:
             Tuple of (system_prompt, user_prompt)
         """
         user_parts = []
-        
+
         # Task description
         if self._task:
             user_parts.append(f"Task: {self._task}")
-        
+
         # Schema
         if self._schema:
             user_parts.append(f"Database Schema ({self._schema_format.value}):")
             user_parts.append(self._schema)
-        
+
         # Column descriptions
         if self._column_descriptions:
             user_parts.append("\nColumn Descriptions:")
             user_parts.append(self._column_descriptions)
-        
+
         # Sample data
         if self._sample_data:
             user_parts.append("\nSample Data:")
             user_parts.append(self._sample_data)
-        
+
         # Rules
         if self._rules:
             user_parts.append("\nRules:")
             for i, rule in enumerate(self._rules, 1):
                 user_parts.append(f"{i}. {rule}")
-        
+
         # Hints
         if self._hints:
             user_parts.append("\nHints:")
             for hint in self._hints:
                 user_parts.append(f"- {hint}")
-        
+
         # Few-shot examples
         if self._examples:
             user_parts.append("\nExamples:")
             for i, example in enumerate(self._examples, 1):
                 user_parts.append(f"\nExample {i}:")
-                user_parts.append(example.to_prompt_string(
+                # Use helper method for formatting
+                user_parts.append(self._format_example(
+                    example,
                     include_explanation=self._chain_of_thought
                 ))
-        
+
         # Chain of thought instruction
         if self._chain_of_thought:
             user_parts.append("\nBefore writing the SQL, think through the following:")
@@ -289,34 +302,34 @@ Rules:
             user_parts.append("3. What join conditions are required?")
             user_parts.append("4. What filters/conditions apply?")
             user_parts.append("5. Is aggregation or grouping needed?")
-        
+
         # Decomposition instruction
         if self._decomposition:
             user_parts.append("\nBreak down the question into sub-questions:")
             user_parts.append("1. Identify the main question components")
             user_parts.append("2. Determine what data each component needs")
             user_parts.append("3. Plan how to combine the results")
-        
+
         # Question
         if self._question:
             user_parts.append(f"\nQuestion: {self._question}")
-        
+
         # Output format
         if self._output_format:
             user_parts.append(f"\nOutput Format: {self._output_format}")
         else:
             user_parts.append("\nGenerate the SQL query:")
-        
+
         # Additional context
         if self._context:
             user_parts.append("\nAdditional Context:")
             for key, value in self._context.items():
                 user_parts.append(f"- {key}: {value}")
-        
+
         user_prompt = "\n".join(user_parts)
-        
+
         return self._system_prompt, user_prompt
-    
+
     def build_user_prompt_only(self) -> str:
         """Build only the user prompt (for APIs that don't support system prompts)."""
         system, user = self.build()
@@ -326,7 +339,7 @@ Rules:
 # Pre-built templates for common patterns
 class PromptTemplates:
     """Collection of pre-built prompt templates."""
-    
+
     ZERO_SHOT = PromptTemplate(
         name="zero_shot",
         description="Basic zero-shot SQL generation",
@@ -338,7 +351,7 @@ Question: {question}
 
 Generate the SQL query:"""
     )
-    
+
     ZERO_SHOT_ENHANCED = PromptTemplate(
         name="zero_shot_enhanced",
         description="Enhanced zero-shot with rules",
@@ -357,7 +370,7 @@ Question: {question}
 
 Generate the SQL query:"""
     )
-    
+
     FEW_SHOT = PromptTemplate(
         name="few_shot",
         description="Few-shot with examples",
@@ -372,7 +385,7 @@ Question: {question}
 
 Generate the SQL query:"""
     )
-    
+
     CHAIN_OF_THOUGHT = PromptTemplate(
         name="chain_of_thought",
         description="Chain-of-thought reasoning",
@@ -392,7 +405,7 @@ Let's approach this step by step:
 
 Now, based on this analysis, generate the SQL query:"""
     )
-    
+
     DECOMPOSITION = PromptTemplate(
         name="decomposition",
         description="Question decomposition approach",
@@ -411,7 +424,7 @@ Break down this question:
 
 Now generate the SQL query that addresses all these components:"""
     )
-    
+
     CORRECTION = PromptTemplate(
         name="correction",
         description="SQL correction prompt",
@@ -429,7 +442,7 @@ Error encountered:
 
 Fix the SQL query to address the error:"""
     )
-    
+
     @classmethod
     def get_template(cls, name: str) -> Optional[PromptTemplate]:
         """Get template by name."""
@@ -442,13 +455,13 @@ Fix the SQL query to address the error:"""
             "correction": cls.CORRECTION,
         }
         return templates.get(name)
-    
+
     @classmethod
     def list_templates(cls) -> list[str]:
         """List available template names."""
         return [
             "zero_shot",
-            "zero_shot_enhanced", 
+            "zero_shot_enhanced",
             "few_shot",
             "chain_of_thought",
             "decomposition",
