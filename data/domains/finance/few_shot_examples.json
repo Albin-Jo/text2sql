@@ -1,0 +1,139 @@
+{
+  "examples": [
+    {
+      "question": "How many records are in the customers table?",
+      "sql": "SELECT COUNT(*) as total_customers FROM customers",
+      "explanation": "Use COUNT(*) to count all rows in a table",
+      "difficulty": "easy",
+      "tags": ["count", "aggregation"],
+      "tables_used": ["customers"],
+      "query_type": "select"
+    },
+    {
+      "question": "Show all checking accounts with balance over $5000",
+      "sql": "SELECT * FROM accounts WHERE account_type = 'checking' AND balance > 5000",
+      "explanation": "Use WHERE with multiple conditions connected by AND",
+      "difficulty": "easy",
+      "tags": ["filter", "comparison"],
+      "tables_used": ["accounts"],
+      "query_type": "select"
+    },
+    {
+      "question": "What is the average loan interest rate?",
+      "sql": "SELECT AVG(interest_rate) as avg_interest_rate FROM loans",
+      "explanation": "Use AVG() function to calculate the mean of a numeric column",
+      "difficulty": "easy",
+      "tags": ["average", "aggregation"],
+      "tables_used": ["loans"],
+      "query_type": "select"
+    },
+    {
+      "question": "List the top 10 customers by credit score",
+      "sql": "SELECT customer_id, first_name, last_name, credit_score FROM customers ORDER BY credit_score DESC LIMIT 10",
+      "explanation": "Use ORDER BY DESC with LIMIT to get top N records",
+      "difficulty": "easy",
+      "tags": ["order_by", "limit", "ranking"],
+      "tables_used": ["customers"],
+      "query_type": "select"
+    },
+    {
+      "question": "Count transactions by type",
+      "sql": "SELECT transaction_type, COUNT(*) as count FROM transactions GROUP BY transaction_type",
+      "explanation": "Use GROUP BY with COUNT to aggregate by category",
+      "difficulty": "medium",
+      "tags": ["group_by", "count", "aggregation"],
+      "tables_used": ["transactions"],
+      "query_type": "select"
+    },
+    {
+      "question": "Get customer names with their account numbers",
+      "sql": "SELECT c.first_name, c.last_name, a.account_id FROM customers c JOIN accounts a ON c.customer_id = a.customer_id",
+      "explanation": "Use JOIN to combine related tables on their foreign key relationship",
+      "difficulty": "medium",
+      "tags": ["join", "two_tables"],
+      "tables_used": ["customers", "accounts"],
+      "query_type": "select"
+    },
+    {
+      "question": "Find the total balance per account type",
+      "sql": "SELECT account_type, SUM(balance) as total_balance FROM accounts GROUP BY account_type",
+      "explanation": "Use SUM with GROUP BY to calculate totals per category",
+      "difficulty": "medium",
+      "tags": ["sum", "group_by", "aggregation"],
+      "tables_used": ["accounts"],
+      "query_type": "select"
+    },
+    {
+      "question": "Which customers have accounts with balance exceeding $10000?",
+      "sql": "SELECT DISTINCT c.customer_id, c.first_name, c.last_name FROM customers c JOIN accounts a ON c.customer_id = a.customer_id WHERE a.balance > 10000",
+      "explanation": "Use JOIN with WHERE filter, DISTINCT to avoid duplicates when customer has multiple qualifying accounts",
+      "difficulty": "medium",
+      "tags": ["join", "filter", "distinct"],
+      "tables_used": ["customers", "accounts"],
+      "query_type": "select"
+    },
+    {
+      "question": "Show monthly transaction totals for 2024",
+      "sql": "SELECT EXTRACT(MONTH FROM transaction_date) as month, SUM(amount) as total_amount FROM transactions WHERE EXTRACT(YEAR FROM transaction_date) = 2024 GROUP BY EXTRACT(MONTH FROM transaction_date) ORDER BY month",
+      "explanation": "Use EXTRACT to get date parts, filter by year, group by month",
+      "difficulty": "medium",
+      "tags": ["date_extract", "group_by", "aggregation"],
+      "tables_used": ["transactions"],
+      "query_type": "select"
+    },
+    {
+      "question": "Find customers who have more than 3 accounts",
+      "sql": "SELECT c.customer_id, c.first_name, c.last_name, COUNT(a.account_id) as account_count FROM customers c JOIN accounts a ON c.customer_id = a.customer_id GROUP BY c.customer_id, c.first_name, c.last_name HAVING COUNT(a.account_id) > 3",
+      "explanation": "Use HAVING to filter groups after aggregation (can't use WHERE for aggregate conditions)",
+      "difficulty": "medium",
+      "tags": ["join", "group_by", "having", "count"],
+      "tables_used": ["customers", "accounts"],
+      "query_type": "select"
+    },
+    {
+      "question": "List all transactions with customer and account details",
+      "sql": "SELECT t.transaction_id, t.amount, t.transaction_type, t.transaction_date, a.account_type, c.first_name, c.last_name FROM transactions t JOIN accounts a ON t.account_id = a.account_id JOIN customers c ON a.customer_id = c.customer_id",
+      "explanation": "Chain multiple JOINs to connect three related tables",
+      "difficulty": "medium",
+      "tags": ["multiple_joins", "three_tables"],
+      "tables_used": ["transactions", "accounts", "customers"],
+      "query_type": "select"
+    },
+    {
+      "question": "Calculate the running total of deposits for each account",
+      "sql": "SELECT account_id, transaction_date, amount, SUM(amount) OVER (PARTITION BY account_id ORDER BY transaction_date) as running_total FROM transactions WHERE transaction_type = 'deposit'",
+      "explanation": "Use window function with PARTITION BY and ORDER BY for running calculations",
+      "difficulty": "hard",
+      "tags": ["window_function", "running_total", "partition_by"],
+      "tables_used": ["transactions"],
+      "query_type": "select"
+    },
+    {
+      "question": "Rank customers by their total loan amounts",
+      "sql": "SELECT c.customer_id, c.first_name, c.last_name, SUM(l.principal_amount) as total_loans, RANK() OVER (ORDER BY SUM(l.principal_amount) DESC) as loan_rank FROM customers c JOIN loans l ON c.customer_id = l.customer_id GROUP BY c.customer_id, c.first_name, c.last_name",
+      "explanation": "Combine aggregation with window function RANK() for ranking",
+      "difficulty": "hard",
+      "tags": ["window_function", "rank", "aggregation", "join"],
+      "tables_used": ["customers", "loans"],
+      "query_type": "select"
+    },
+    {
+      "question": "Find accounts that have never had a transaction",
+      "sql": "SELECT a.account_id, a.customer_id, a.account_type FROM accounts a WHERE NOT EXISTS (SELECT 1 FROM transactions t WHERE t.account_id = a.account_id)",
+      "explanation": "Use NOT EXISTS with correlated subquery to find records with no matching entries",
+      "difficulty": "hard",
+      "tags": ["subquery", "not_exists", "correlated"],
+      "tables_used": ["accounts", "transactions"],
+      "query_type": "select"
+    },
+    {
+      "question": "Calculate the percentage each account type contributes to total balance",
+      "sql": "SELECT account_type, SUM(balance) as type_total, ROUND(SUM(balance) * 100.0 / (SELECT SUM(balance) FROM accounts), 2) as percentage FROM accounts GROUP BY account_type",
+      "explanation": "Use scalar subquery in SELECT to calculate percentage of total",
+      "difficulty": "hard",
+      "tags": ["subquery", "percentage", "aggregation"],
+      "tables_used": ["accounts"],
+      "query_type": "select"
+    }
+  ]
+}

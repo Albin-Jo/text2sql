@@ -1,0 +1,76 @@
+# text2sql_mvp/config/domains/finance.yaml
+# Finance Domain Configuration
+
+domain:
+  name: finance
+  description: "Financial transactions and customer data for a retail bank"
+  version: "1.0.0"
+
+schema:
+  path: "data/domains/finance/schema.sql"
+  format: "bigquery"
+  
+tables:
+  - name: customers
+    description: "Bank customers with their personal information"
+    primary_key: customer_id
+    
+  - name: accounts
+    description: "Customer bank accounts (checking, savings, etc.)"
+    primary_key: account_id
+    foreign_keys:
+      - column: customer_id
+        references: customers.customer_id
+        
+  - name: transactions
+    description: "Financial transactions on accounts"
+    primary_key: transaction_id
+    foreign_keys:
+      - column: account_id
+        references: accounts.account_id
+        
+  - name: loans
+    description: "Customer loans and credit products"
+    primary_key: loan_id
+    foreign_keys:
+      - column: customer_id
+        references: customers.customer_id
+        
+  - name: branches
+    description: "Bank branch locations"
+    primary_key: branch_id
+    
+  - name: employees
+    description: "Bank employees"
+    primary_key: employee_id
+    foreign_keys:
+      - column: branch_id
+        references: branches.branch_id
+
+data:
+  seed_data: "data/domains/finance/seed_data.sql"
+  test_cases: "data/domains/finance/test_cases.json"
+  few_shot_examples: "data/domains/finance/few_shot_examples.json"
+
+sql_dialect: "bigquery"
+
+# Domain-specific rules and hints
+rules:
+  - "Always use TIMESTAMP functions for date comparisons in BigQuery"
+  - "Account balances are stored as NUMERIC(15,2) for precision"
+  - "Transaction amounts can be negative (withdrawals) or positive (deposits)"
+  - "Use SAFE_DIVIDE when calculating ratios to avoid division by zero"
+  - "Customer names are stored as separate first_name and last_name columns"
+
+common_patterns:
+  - name: "total_by_customer"
+    description: "Aggregate totals grouped by customer"
+    template: "SELECT c.customer_id, c.first_name, c.last_name, {aggregation} FROM customers c JOIN {table} ON ... GROUP BY c.customer_id, c.first_name, c.last_name"
+    
+  - name: "date_range_filter"
+    description: "Filter by date range"
+    template: "WHERE {date_column} BETWEEN '{start_date}' AND '{end_date}'"
+    
+  - name: "account_balance_calc"
+    description: "Calculate account balance from transactions"
+    template: "SUM(CASE WHEN transaction_type = 'deposit' THEN amount ELSE -amount END)"

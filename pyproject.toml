@@ -1,0 +1,88 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "text2sql-mvp"
+version = "0.1.0"
+description = "Text-to-SQL MVP using Google Gemini Flash"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+authors = [
+    {name = "Text2SQL Team"}
+]
+keywords = ["text2sql", "nlp", "sql", "gemini", "bigquery"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "google-genai>=1.0.0",
+    "google-cloud-bigquery>=3.25.0",
+    "sqlglot>=25.0.0",
+    "duckdb>=1.0.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "python-dotenv>=1.0.0",
+    "pyyaml>=6.0.0",
+    "tenacity>=8.2.0",
+    "aiohttp>=3.9.0",
+    "typer>=0.9.0",
+    "rich>=13.7.0",
+    "structlog>=23.2.0",
+]
+
+[project.optional-dependencies]
+embeddings = [
+    "sentence-transformers>=2.2.0",
+    "numpy>=1.26.0",
+]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.7.0",
+]
+all = [
+    "text2sql-mvp[embeddings,dev]",
+]
+
+[project.scripts]
+text2sql = "main:app"
+
+[project.urls]
+Homepage = "https://github.com/example/text2sql-mvp"
+Documentation = "https://github.com/example/text2sql-mvp#readme"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["config*", "core*", "schema*", "strategies*", "data*", "validation*", "production*", "experimentation*", "evaluation*", "reports*", "context*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "I", "N", "W"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_ignores = true
+disallow_untyped_defs = true

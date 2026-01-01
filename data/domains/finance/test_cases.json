@@ -1,0 +1,184 @@
+{
+  "test_cases": [
+    {
+      "id": "fin_001",
+      "question": "How many customers do we have?",
+      "expected_sql": "SELECT COUNT(*) as customer_count FROM customers",
+      "difficulty": "easy",
+      "category": "aggregation",
+      "tags": ["count", "single_table"],
+      "tables_used": ["customers"]
+    },
+    {
+      "id": "fin_002",
+      "question": "List all active accounts",
+      "expected_sql": "SELECT * FROM accounts WHERE status = 'active'",
+      "difficulty": "easy",
+      "category": "filter",
+      "tags": ["filter", "single_table"],
+      "tables_used": ["accounts"]
+    },
+    {
+      "id": "fin_003",
+      "question": "What is the total balance across all accounts?",
+      "expected_sql": "SELECT SUM(balance) as total_balance FROM accounts",
+      "difficulty": "easy",
+      "category": "aggregation",
+      "tags": ["sum", "single_table"],
+      "tables_used": ["accounts"]
+    },
+    {
+      "id": "fin_004",
+      "question": "Show me all customers who joined in 2024",
+      "expected_sql": "SELECT * FROM customers WHERE EXTRACT(YEAR FROM created_at) = 2024",
+      "difficulty": "easy",
+      "category": "filter",
+      "tags": ["date_filter", "single_table"],
+      "tables_used": ["customers"]
+    },
+    {
+      "id": "fin_005",
+      "question": "What are the top 5 accounts by balance?",
+      "expected_sql": "SELECT account_id, customer_id, balance FROM accounts ORDER BY balance DESC LIMIT 5",
+      "difficulty": "easy",
+      "category": "ranking",
+      "tags": ["order_by", "limit", "single_table"],
+      "tables_used": ["accounts"]
+    },
+    {
+      "id": "fin_006",
+      "question": "How many accounts does each customer have?",
+      "expected_sql": "SELECT customer_id, COUNT(*) as account_count FROM accounts GROUP BY customer_id",
+      "difficulty": "medium",
+      "category": "aggregation",
+      "tags": ["count", "group_by", "single_table"],
+      "tables_used": ["accounts"]
+    },
+    {
+      "id": "fin_007",
+      "question": "What is the average account balance by account type?",
+      "expected_sql": "SELECT account_type, AVG(balance) as avg_balance FROM accounts GROUP BY account_type",
+      "difficulty": "medium",
+      "category": "aggregation",
+      "tags": ["avg", "group_by", "single_table"],
+      "tables_used": ["accounts"]
+    },
+    {
+      "id": "fin_008",
+      "question": "List customers with their account balances",
+      "expected_sql": "SELECT c.customer_id, c.first_name, c.last_name, a.account_id, a.balance FROM customers c JOIN accounts a ON c.customer_id = a.customer_id",
+      "difficulty": "medium",
+      "category": "join",
+      "tags": ["join", "two_tables"],
+      "tables_used": ["customers", "accounts"]
+    },
+    {
+      "id": "fin_009",
+      "question": "Find the total transaction amount per account for deposits",
+      "expected_sql": "SELECT account_id, SUM(amount) as total_deposits FROM transactions WHERE transaction_type = 'deposit' GROUP BY account_id",
+      "difficulty": "medium",
+      "category": "aggregation",
+      "tags": ["sum", "group_by", "filter"],
+      "tables_used": ["transactions"]
+    },
+    {
+      "id": "fin_010",
+      "question": "Which customers have more than one account?",
+      "expected_sql": "SELECT customer_id, COUNT(*) as num_accounts FROM accounts GROUP BY customer_id HAVING COUNT(*) > 1",
+      "difficulty": "medium",
+      "category": "aggregation",
+      "tags": ["count", "group_by", "having"],
+      "tables_used": ["accounts"]
+    },
+    {
+      "id": "fin_011",
+      "question": "Show me all transactions above $1000 with customer names",
+      "expected_sql": "SELECT t.transaction_id, t.amount, t.transaction_date, c.first_name, c.last_name FROM transactions t JOIN accounts a ON t.account_id = a.account_id JOIN customers c ON a.customer_id = c.customer_id WHERE t.amount > 1000",
+      "difficulty": "medium",
+      "category": "join",
+      "tags": ["join", "filter", "three_tables"],
+      "tables_used": ["transactions", "accounts", "customers"]
+    },
+    {
+      "id": "fin_012",
+      "question": "What is the total loan amount by customer?",
+      "expected_sql": "SELECT c.customer_id, c.first_name, c.last_name, SUM(l.principal_amount) as total_loans FROM customers c JOIN loans l ON c.customer_id = l.customer_id GROUP BY c.customer_id, c.first_name, c.last_name",
+      "difficulty": "medium",
+      "category": "aggregation",
+      "tags": ["sum", "join", "group_by"],
+      "tables_used": ["customers", "loans"]
+    },
+    {
+      "id": "fin_013",
+      "question": "Find customers who have both savings and checking accounts",
+      "expected_sql": "SELECT DISTINCT c.customer_id, c.first_name, c.last_name FROM customers c WHERE EXISTS (SELECT 1 FROM accounts a1 WHERE a1.customer_id = c.customer_id AND a1.account_type = 'savings') AND EXISTS (SELECT 1 FROM accounts a2 WHERE a2.customer_id = c.customer_id AND a2.account_type = 'checking')",
+      "difficulty": "hard",
+      "category": "subquery",
+      "tags": ["subquery", "exists", "complex_filter"],
+      "tables_used": ["customers", "accounts"]
+    },
+    {
+      "id": "fin_014",
+      "question": "Calculate the monthly transaction volume for each account",
+      "expected_sql": "SELECT account_id, EXTRACT(YEAR FROM transaction_date) as year, EXTRACT(MONTH FROM transaction_date) as month, COUNT(*) as transaction_count, SUM(amount) as total_amount FROM transactions GROUP BY account_id, EXTRACT(YEAR FROM transaction_date), EXTRACT(MONTH FROM transaction_date) ORDER BY year, month",
+      "difficulty": "hard",
+      "category": "aggregation",
+      "tags": ["date_extract", "group_by", "multiple_aggregations"],
+      "tables_used": ["transactions"]
+    },
+    {
+      "id": "fin_015",
+      "question": "Rank customers by their total account balance",
+      "expected_sql": "SELECT c.customer_id, c.first_name, c.last_name, SUM(a.balance) as total_balance, RANK() OVER (ORDER BY SUM(a.balance) DESC) as balance_rank FROM customers c JOIN accounts a ON c.customer_id = a.customer_id GROUP BY c.customer_id, c.first_name, c.last_name",
+      "difficulty": "hard",
+      "category": "window",
+      "tags": ["window_function", "rank", "join", "aggregation"],
+      "tables_used": ["customers", "accounts"]
+    },
+    {
+      "id": "fin_016",
+      "question": "Find the running balance for each account based on transactions",
+      "expected_sql": "SELECT account_id, transaction_date, amount, transaction_type, SUM(CASE WHEN transaction_type = 'deposit' THEN amount ELSE -amount END) OVER (PARTITION BY account_id ORDER BY transaction_date) as running_balance FROM transactions",
+      "difficulty": "hard",
+      "category": "window",
+      "tags": ["window_function", "running_total", "case_when"],
+      "tables_used": ["transactions"]
+    },
+    {
+      "id": "fin_017",
+      "question": "Show branches with their total customer deposits",
+      "expected_sql": "SELECT b.branch_id, b.branch_name, SUM(a.balance) as total_deposits FROM branches b JOIN accounts a ON b.branch_id = a.branch_id WHERE a.account_type = 'savings' GROUP BY b.branch_id, b.branch_name ORDER BY total_deposits DESC",
+      "difficulty": "medium",
+      "category": "aggregation",
+      "tags": ["join", "group_by", "filter"],
+      "tables_used": ["branches", "accounts"]
+    },
+    {
+      "id": "fin_018",
+      "question": "Find customers with loans but no active accounts",
+      "expected_sql": "SELECT DISTINCT c.customer_id, c.first_name, c.last_name FROM customers c JOIN loans l ON c.customer_id = l.customer_id WHERE NOT EXISTS (SELECT 1 FROM accounts a WHERE a.customer_id = c.customer_id AND a.status = 'active')",
+      "difficulty": "hard",
+      "category": "subquery",
+      "tags": ["subquery", "not_exists", "complex_filter"],
+      "tables_used": ["customers", "loans", "accounts"]
+    },
+    {
+      "id": "fin_019",
+      "question": "What percentage of accounts are of each type?",
+      "expected_sql": "SELECT account_type, COUNT(*) as count, ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 2) as percentage FROM accounts GROUP BY account_type",
+      "difficulty": "hard",
+      "category": "window",
+      "tags": ["window_function", "percentage", "aggregation"],
+      "tables_used": ["accounts"]
+    },
+    {
+      "id": "fin_020",
+      "question": "List employees along with their manager's name",
+      "expected_sql": "SELECT e.employee_id, e.first_name, e.last_name, m.first_name as manager_first_name, m.last_name as manager_last_name FROM employees e LEFT JOIN employees m ON e.manager_employee_id = m.employee_id",
+      "difficulty": "medium",
+      "category": "join",
+      "tags": ["self_join", "left_join"],
+      "tables_used": ["employees"]
+    }
+  ]
+}
